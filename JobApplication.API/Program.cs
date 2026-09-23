@@ -2,7 +2,6 @@ using System.Text;
 using JobApplication.API.Services;
 using JobApplication.Application.Common;
 using JobApplication.Application.Interfaces;
-using JobApplication.Application.Services;
 using JobApplication.Infrastructure.Auth;
 using JobApplication.Infrastructure.Persistence;
 using JobApplication.Infrastructure.Repositories;
@@ -31,10 +30,14 @@ namespace JobApplication.API
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlServer(connectionString));
 
-            builder.Services.AddScoped<IJobService, JobService>();
-            builder.Services.AddScoped<IJobCandidateApplicationService, JobCandidateApplicationService>();
             builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
             builder.Services.AddScoped<ICvStorage, LocalCvStorage>();
+
+            // ---------- CQRS (MediatR) ----------
+            // Scans the Application assembly and registers every IRequestHandler<,> it finds
+            // (Features/Jobs, Features/Applications, Features/Auth).
+            builder.Services.AddMediatR(cfg =>
+                cfg.RegisterServicesFromAssembly(typeof(JobApplication.Application.Common.Roles).Assembly));
 
             // ---------- Identity (users + passwords) ----------
             builder.Services
@@ -92,7 +95,6 @@ namespace JobApplication.API
             builder.Services.AddAuthorization();
 
             // ---------- Auth use case + its Infrastructure implementations ----------
-            builder.Services.AddScoped<AuthService>();
             builder.Services.AddScoped<IIdentityService, IdentityService>();
             builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 

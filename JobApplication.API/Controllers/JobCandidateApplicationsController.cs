@@ -2,8 +2,13 @@
 using JobApplication.API.Extensions;
 using JobApplication.Application.Common;
 using JobApplication.Application.DTOs;
-using JobApplication.Application.Interfaces;
+using JobApplication.Application.Features.Applications.Commands.Apply;
+using JobApplication.Application.Features.Applications.Commands.CancelApplication;
+using JobApplication.Application.Features.Applications.Commands.UpdateApplicationStatus;
+using JobApplication.Application.Features.Applications.Queries.GetApplicationsForJob;
+using JobApplication.Application.Features.Applications.Queries.GetMyApplications;
 using JobApplication.Domain.Enums;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -25,11 +30,11 @@ namespace JobApplication.API.Controllers
             [".doc"] = new byte[] { 0xD0, 0xCF, 0x11, 0xE0 }   // OLE2
         };
 
-        private readonly IJobCandidateApplicationService _JobCandidateApplicationService;
+        private readonly IMediator _mediator;
 
-        public JobCandidateApplicationsController(IJobCandidateApplicationService jobApplicationService)
+        public JobCandidateApplicationsController(IMediator mediator)
         {
-            _JobCandidateApplicationService = jobApplicationService;
+            _mediator = mediator;
         }
 
         // Identity always comes from the token, never from the request.
@@ -57,8 +62,7 @@ namespace JobApplication.API.Controllers
 
             try
             {
-                var result = await _JobCandidateApplicationService.ApplyAsync(
-                    UserId, createApplicationDto.JobId, stream, extension);
+                var result = await _mediator.Send(new ApplyCommand(UserId, createApplicationDto.JobId, stream, extension));
 
                 return result.Succeeded
                     ? StatusCode(StatusCodes.Status201Created, new { id = result.Value })
@@ -73,16 +77,16 @@ namespace JobApplication.API.Controllers
 
         [Authorize(Roles = Roles.Candidate)]
         [HttpGet("my")]
-        public IActionResult GetMy()
+        public async Task<IActionResult> GetMy()
         {
-            return Ok(_JobCandidateApplicationService.GetMy(UserId));
+            return Ok(await _mediator.Send(new GetMyApplicationsQuery(UserId)));
         }
 
         [Authorize(Roles = Roles.Recruiter)]
         [HttpGet("~/api/jobs/{jobId:int}/applications")]
-        public IActionResult GetForJob(int jobId)
+        public async Task<IActionResult> GetForJob(int jobId)
         {
-            var result = _JobCandidateApplicationService.GetForJob(jobId, UserId);
+            var result = await _mediator.Send(new GetApplicationsForJobQuery(jobId, UserId));
             return result.Succeeded ? Ok(result.Value) : this.FailureResult(result);
         }
 
@@ -91,7 +95,7 @@ namespace JobApplication.API.Controllers
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Cancel(int id)
         {
-            var result = await _JobCandidateApplicationService.CancelAsync(id, UserId);
+            var result = await _mediator.Send(new CancelApplicationCommand(id, UserId));
             return result.Succeeded ? Ok(result.Value) : this.FailureResult(result);
         }
 
@@ -99,7 +103,7 @@ namespace JobApplication.API.Controllers
         [HttpPatch("{id:int}/{status}")]
         public async Task<IActionResult> Update(int id, JobApplicationStatus status)
         {
-            var result = await _JobCandidateApplicationService.UpdateStatus(id, status, UserId);
+            var result = await _mediator.Send(new UpdateApplicationStatusCommand(id, status, UserId));
             return result.Succeeded ? Ok(new { id = result.Value }) : this.FailureResult(result);
         }
     }
